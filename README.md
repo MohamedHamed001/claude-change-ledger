@@ -2,7 +2,7 @@
 
 A plugin for [Claude Code](https://docs.claude.com/en/docs/claude-code): **change-ledger**.
 
-A pane that lists every file Claude changed in this session, grouped by who owns it, each with the request that caused the change, and a button that copies the list as a standup note.
+A pane that lists every file Claude changed in this session under the request that caused it, marks the ones someone else owns, and has a button that copies the list as a standup note.
 
 Part of [claude-mods](https://github.com/MohamedHamed001/claude-mods), which lists this plugin and its siblings.
 
@@ -24,15 +24,27 @@ Then start a new session: a session reads its plugins once, when it starts. Upda
 
 Type `/changes` to open the pane.
 
+```
+6 files changed   2 new   4 edited   1 owner to tell
+[Copy standup note] [By owner] [Clear]
+
+add the exports endpoint                         4m ago
+  + exports.py        src/api/routers               Ali
+  ~ dependencies.py   src/api                       Ali
+  ~ export_cases.py   src/application/services       ×3
+```
+
 | You see | Where it comes from |
 | --- | --- |
-| the file | the Edit, Write or NotebookEdit tool call that changed it |
-| `new` | the file did not exist before this session |
+| a card's heading | the prompt you sent at the start of that turn, cut to one line; newest first |
+| `+` or `~` | the file is new in this session, or was edited |
+| the name, then the folder | the Edit, Write or NotebookEdit tool call that changed it; long folders are cut to their last two parts |
 | `×3` | how many times it was written |
-| the line under the file | the prompt you sent at the start of that turn, cut to one line |
-| the group heading | the file's owner, or its folder when nobody owns it |
+| a name at the end of a row | the file's owner, from CODEOWNERS |
 
-**Copy as standup note** puts a short markdown list on the clipboard: owned groups first, marked "touches your area", so you know who to tell.
+**By owner** switches to one card per owner (then per folder for files nobody owns), and **By request** switches back.
+
+**Copy standup note** puts a short markdown list on the clipboard: owned groups first, marked "touches your area", so you know who to tell.
 
 ### Owners
 

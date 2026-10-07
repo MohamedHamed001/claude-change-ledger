@@ -1,7 +1,8 @@
 // Change ledger: every file Claude changed in this session, and why.
 //
-// What you see: a pane (type /changes) with the changed files grouped by owner, each with
-// the request that caused the change, and a button that copies the list as a standup note.
+// What you see: a pane (type /changes) with one card per request and the files it changed
+// under it; a button switches to one card per owner, and another copies the list as a
+// standup note.
 //
 // Where each piece of information comes from:
 //   the file      the Edit / Write / NotebookEdit tool call that changed it
@@ -16,7 +17,20 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import { groupChanges, parseOwners, recordChange, relativePath, standupNote, whyFromPrompt } from './logic'
+import type { Change } from '../types'
+import {
+  agoText,
+  groupByRequest,
+  groupChanges,
+  ownerOf,
+  parseOwners,
+  recordChange,
+  relativePath,
+  splitPath,
+  standupNote,
+  summary,
+  whyFromPrompt,
+} from './logic'
 import type { OwnerRule } from './logic'
 
 const PANE = 'changes'
@@ -32,6 +46,8 @@ const changes = atom({ plugin: 'change-ledger', key: 'changes' } as const, [])
 let projectFolder = ''
 let owners: OwnerRule[] = []
 let lastPrompt = ''
+// How the pane groups files: under the request that changed them, or under their owner.
+let view: 'request' | 'owner' = 'request'
 
 /** Read the project's CODEOWNERS rules; none is fine. */
 async function loadOwners($: EngineInterface): Promise<OwnerRule[]> {
@@ -116,7 +132,6 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const list = await read($, changes)
-    const groups = groupChanges(list, owners)
     const { Box, Button, Text } = $.ui.resolve(e)
 
     if (list.length === 0) {
@@ -127,44 +142,94 @@ export const register: Register = on => {
       )
     }
 
+    const now = await $.clock.now()
+    const counts = summary(list, owners)
+
+    /**
+     * One file: a mark (+ new, ~ edited), the name, then its folder dimmed. `showOwner`
+     * adds the owner's name at the end; the owner view leaves it out, its heading says it.
+     */
+    const row = (change: Change, showOwner: boolean) => {
+      const { name, folder } = splitPath(change.file)
+      const owner = showOwner ? ownerOf(owners, change.file) : null
+
+      return (
+        <Box columnGap={1}>
+          <Text color={change.kind === 'created' ? 'success' : undefined} dimColor={change.kind !== 'created'}>
+            {change.kind === 'created' ? '+' : '~'}
+          </Text>
+          <Box flexShrink={0}>
+            <Text>{name}</Text>
+          </Box>
+          <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
+            <Text dimColor>{folder}</Text>
+          </Box>
+          {change.edits > 1 && <Text dimColor>{`×${change.edits}`}</Text>}
+          {owner && <Text color="warning">{owner}</Text>}
+        </Box>
+      )
+    }
+
+    /** One outlined card: a heading on the left, a small note on the right, rows beneath. */
+    const card = (heading: string, note: string, isWarning: boolean, rows: unknown) => (
+      <Box flexDirection="column" rowGap={1} paddingX={1} borderStyle="round" borderDimColor>
+        <Box columnGap={2}>
+          <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
+            <Text bold color={isWarning ? 'warning' : undefined}>
+              {heading}
+            </Text>
+          </Box>
+          <Text dimColor>{note}</Text>
+        </Box>
+        <Box flexDirection="column">{rows}</Box>
+      </Box>
+    )
+
     return (
       <Box flexDirection="column" rowGap={1} padding={1}>
-        <Box columnGap={1} alignItems="center">
-          <Box flexGrow={1}>
-            <Text bold>{`${list.length} file${list.length === 1 ? '' : 's'} changed`}</Text>
-          </Box>
-          <Button key="copy-note" label="Copy as standup note" variant="primary" onPress={() => copyNote($)} />
+        {/* The header: the total, then only the counts that are not zero. */}
+        <Box columnGap={2}>
+          <Text bold>{`${list.length} file${list.length === 1 ? '' : 's'} changed`}</Text>
+          {counts.created > 0 && <Text color="success">{`${counts.created} new`}</Text>}
+          {counts.edited > 0 && <Text dimColor>{`${counts.edited} edited`}</Text>}
+          {counts.owners > 0 && (
+            <Text color="warning">{`${counts.owners} owner${counts.owners === 1 ? '' : 's'} to tell`}</Text>
+          )}
+        </Box>
+        <Box columnGap={1}>
+          <Button key="copy-note" label="Copy standup note" variant="primary" onPress={() => copyNote($)} />
+          <Button
+            key="switch-view"
+            label={view === 'request' ? 'By owner' : 'By request'}
+            onPress={() => {
+              view = view === 'request' ? 'owner' : 'request'
+              $.ui.invalidate('ui.render')
+            }}
+          />
           <Button key="clear" label="Clear" onPress={() => update($, changes, () => [])} />
         </Box>
 
-        {groups.map(group => (
-          <Box flexDirection="column" paddingX={1} borderStyle="round" borderDimColor>
-            {/* An owned group is someone else's area: it stands out. */}
-            <Text color={group.isOwned ? 'warning' : undefined} dimColor={!group.isOwned}>
-              {`${group.isOwned ? `Owner: ${group.title}` : group.title} (${group.changes.length})`}
-            </Text>
-            {group.changes.map(change => (
-              <Box flexDirection="column">
-                <Box columnGap={1}>
-                  <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
-                    <Text>{change.file}</Text>
-                  </Box>
-                  {change.kind === 'created' && <Text color="success">new</Text>}
-                  {change.edits > 1 && <Text dimColor>{`×${change.edits}`}</Text>}
-                </Box>
-                {change.why && (
-                  <Box marginLeft={2} flexShrink={1} minWidth={0} overflow="hidden">
-                    <Text dimColor>{change.why}</Text>
-                  </Box>
-                )}
-              </Box>
-            ))}
-          </Box>
-        ))}
+        {view === 'request'
+          ? groupByRequest(list).map(group =>
+              card(
+                group.why || 'No request recorded',
+                agoText(group.at, now),
+                false,
+                group.changes.map(change => row(change, true)),
+              ),
+            )
+          : groupChanges(list, owners).map(group =>
+              card(
+                group.isOwned ? `Owner: ${group.title}` : group.title,
+                `${group.changes.length} file${group.changes.length === 1 ? '' : 's'}`,
+                group.isOwned,
+                group.changes.map(change => row(change, false)),
+              ),
+            )}
 
         <Text dimColor>
           {owners.length === 0
-            ? 'No CODEOWNERS file: grouped by folder. Add .claude/CODEOWNERS to group by owner.'
+            ? 'No CODEOWNERS file yet. Add .claude/CODEOWNERS to mark files that belong to someone else.'
             : 'Files changed by shell commands are not listed.'}
         </Text>
       </Box>

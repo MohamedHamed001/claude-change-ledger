@@ -130,3 +130,56 @@ export function standupNote(groups: readonly Group[], date: string): string {
 
   return lines.join('\n')
 }
+
+// ---- How the pane presents things ------------------------------------------------------
+
+/** One request and the files it changed: the pane's default grouping. */
+export type RequestGroup = { why: string; at: number; changes: Change[] }
+
+/**
+ * Sort the changes into one group per request, newest request first. A file edited by two
+ * requests sits under the later one, because each entry keeps only its latest reason.
+ */
+export function groupByRequest(changes: readonly Change[]): RequestGroup[] {
+  const groups = new Map<string, RequestGroup>()
+  for (const change of changes) {
+    const group = groups.get(change.why) ?? { why: change.why, at: 0, changes: [] }
+    group.changes.push(change)
+    group.at = Math.max(group.at, change.at)
+    groups.set(change.why, group)
+  }
+
+  return [...groups.values()]
+    .map(group => ({ ...group, changes: [...group.changes].sort((a, b) => a.file.localeCompare(b.file)) }))
+    .sort((a, b) => b.at - a.at)
+}
+
+/**
+ * A path split for display: the file name, and its folder shortened to the last two parts.
+ * "src/infrastructure/generation/vendor/utils/hex.py" -> { name: "hex.py", folder: "…/vendor/utils" }
+ */
+export function splitPath(file: string): { name: string; folder: string } {
+  const parts = file.split('/')
+  const name = parts.pop() ?? file
+  const folder = parts.length > 3 ? `…/${parts.slice(-2).join('/')}` : parts.join('/')
+
+  return { name, folder }
+}
+
+/** "just now", "4m ago", "2h ago": how long since a change. */
+export function agoText(at: number, now: number): string {
+  const minutes = Math.floor(Math.max(0, now - at) / 60_000)
+  if (minutes < 1) {
+    return 'just now'
+  }
+
+  return minutes < 60 ? `${minutes}m ago` : `${Math.floor(minutes / 60)}h ago`
+}
+
+/** The header's counts: new files, edited files, and how many different owners are affected. */
+export function summary(changes: readonly Change[], rules: readonly OwnerRule[]): { created: number; edited: number; owners: number } {
+  const created = changes.filter(change => change.kind === 'created').length
+  const owners = new Set(changes.map(change => ownerOf(rules, change.file)).filter(owner => owner !== null))
+
+  return { created, edited: changes.length - created, owners: owners.size }
+}
