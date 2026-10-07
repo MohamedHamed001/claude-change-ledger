@@ -154,7 +154,7 @@ export const register: Register = on => {
       const owner = showOwner ? ownerOf(owners, change.file) : null
 
       return (
-        <Box columnGap={1}>
+        <Box columnGap={2}>
           <Text color={change.kind === 'created' ? 'success' : undefined} dimColor={change.kind !== 'created'}>
             {change.kind === 'created' ? '+' : '~'}
           </Text>
@@ -172,7 +172,7 @@ export const register: Register = on => {
 
     /** One outlined card: a heading on the left, a small note on the right, rows beneath. */
     const card = (heading: string, note: string, isWarning: boolean, rows: unknown) => (
-      <Box flexDirection="column" rowGap={1} paddingX={1} borderStyle="round" borderDimColor>
+      <Box flexDirection="column" rowGap={1} paddingX={2} paddingY={1} borderStyle="round" borderDimColor>
         <Box columnGap={2}>
           <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden">
             <Text bold color={isWarning ? 'warning' : undefined}>
@@ -181,12 +181,14 @@ export const register: Register = on => {
           </Box>
           <Text dimColor>{note}</Text>
         </Box>
-        <Box flexDirection="column">{rows}</Box>
+        <Box flexDirection="column" rowGap={1}>
+          {rows}
+        </Box>
       </Box>
     )
 
     return (
-      <Box flexDirection="column" rowGap={1} padding={1}>
+      <Box flexDirection="column" rowGap={2} padding={2}>
         {/* The header: the total, then only the counts that are not zero. */}
         <Box columnGap={2}>
           <Text bold>{`${list.length} file${list.length === 1 ? '' : 's'} changed`}</Text>

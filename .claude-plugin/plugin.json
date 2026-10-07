@@ -1,6 +1,6 @@
 {
   "name": "change-ledger",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A pane listing every file Claude changed this session, grouped by who owns it, each with the request that caused it, and a button that copies the list as a standup note",
   "author": {
     "name": "Mohamed Hamed"
