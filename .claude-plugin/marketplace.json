@@ -1,0 +1,16 @@
+{
+  "name": "claude-change-ledger",
+  "owner": {
+    "name": "Mohamed Hamed"
+  },
+  "plugins": [
+    {
+      "name": "change-ledger",
+      "source": "./",
+      "description": "A pane listing every file Claude changed this session, grouped by who owns it, each with the request that caused it, and a button that copies the list as a standup note"
+    }
+  ],
+  "metadata": {
+    "description": "A pane listing every file Claude changed this session, grouped by who owns it, each with the request that caused it, and a button that copies the list as a standup note"
+  }
+}
